@@ -15,7 +15,7 @@ permissions:
 
 env:
   BOMLENS_VERSION: "1.13.7"
-  GATE_SEVERITY: critical      # 단계적 강화: critical → (안정화 후) high. 1. 정책의 조치 기한과 맞춘다
+  GATE_SEVERITY: high          # 단계적 강화: critical → (안정화 후) high. 1. 정책의 조치 기한과 맞춘다
 
 jobs:
   release-sbom:
