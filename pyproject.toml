@@ -8,5 +8,6 @@ dependencies = [
     "boto3>=1.43.73",
     "fastapi>=0.141.1",
     "python-dotenv>=1.2.3",
+    "tenacity>=9.2.1",
     "uvicorn[standard]>=0.52.3",
 ]
