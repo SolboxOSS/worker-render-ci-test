@@ -47,9 +47,6 @@ jobs:
             --output-dir "$RUNNER_TEMP/sbom" \
             --all --generate-only
       - name: 취약점 현황 (관찰 모드 — 실패시키지 않음)
-        env:
-          # exceptions.md의 지문(h:…)을 대조하는 키. 공개 저장소는 CVE 대신 지문만 적는다
-          EXCEPTION_KEY: ${{ secrets.EXCEPTION_KEY }}
         run: |
           D="$RUNNER_TEMP/sbom/${{ github.event.repository.name }}_${{ steps.ver.outputs.version }}"
           python3 scripts/supply-chain/vuln_gate.py --report-only --severity high \

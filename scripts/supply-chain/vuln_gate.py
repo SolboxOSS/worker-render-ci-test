@@ -12,13 +12,8 @@ docs/supply-chain/exceptions.md 의 "유효한" 예외와 대조한다.
 사용법:
   python3 vuln_gate.py --security <..._security.json> [--severity critical|high|medium|low]
                        [--exceptions docs/supply-chain/exceptions.md] [--report-only] [--redact]
-  python3 vuln_gate.py --fingerprint CVE-2026-12345 [CVE-...]     # 예외용 지문 만들기
 
-공개 저장소에서는 exceptions.md에 CVE를 평문으로 적지 않고 "지문"을 적는다.
-  지문 = "h:" + HMAC-SHA256(EXCEPTION_KEY, 식별자 대문자) 앞 16자리
-  EXCEPTION_KEY는 저장소 Secret으로만 보관한다. 키가 없으면 지문에서 CVE를 알아낼 수 없다.
-  CVE ↔ 예외번호 대응은 사내 위키 「6. 예외 승인대장」에만 둔다.
---redact(공개 저장소)에서는 평문 CVE 예외를 인정하지 않는다.
+--redact(공개 저장소): 로그·요약에 건수와 적용된 예외번호만 남긴다.
 
 --report-only: 결과만 기록하고 실패시키지 않는다(관찰 모드).
 결과는 표준 출력과 GitHub Step Summary($GITHUB_STEP_SUMMARY)에 남고,
@@ -26,8 +21,6 @@ docs/supply-chain/exceptions.md 의 "유효한" 예외와 대조한다.
 """
 import argparse
 import datetime
-import hashlib
-import hmac
 import json
 import os
 import re
@@ -53,14 +46,9 @@ def load_findings(path):
 
 
 ID_RE = r"^(CVE-\d{4}-\d+|GHSA-[\w-]+)$"
-FP_RE = r"^h:[0-9a-f]{16}$"
 
 
-def fingerprint(key, ident):
-    return "h:" + hmac.new(key.encode(), ident.strip().upper().encode(), hashlib.sha256).hexdigest()[:16]
-
-
-def load_exceptions(path, today, redact=False):
+def load_exceptions(path, today):
     """exceptions.md 표에서 취약점 예외를 읽는다. 열 이름으로 찾으므로 열 순서는 바뀌어도 된다."""
     valid, invalid = {}, []
     if not path or not os.path.exists(path):
@@ -78,14 +66,9 @@ def load_exceptions(path, today, redact=False):
             continue
         row = dict(zip(header, cells))
         ident = row.get("식별자", row.get("CVE/식별자", "")).strip()
-        is_fp = bool(re.match(FP_RE, ident))
-        if not is_fp:
-            if not re.match(ID_RE, ident, re.I):
-                continue
-            ident = ident.upper()
-            if redact:
-                invalid.append(("(평문 식별자)", row.get("예외번호", ""), "공개 저장소는 지문(h:…)만 허용"))
-                continue
+        if not re.match(ID_RE, ident, re.I):
+            continue
+        ident = ident.upper()
         exp = row.get("만료일", "")
         ok = (row.get("상태") == "유효" and row.get("승인자") and re.match(r"^\d{4}-\d{2}-\d{2}$", exp) and exp >= today)
         if ok:
@@ -98,7 +81,6 @@ def load_exceptions(path, today, redact=False):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--security")
-    ap.add_argument("--fingerprint", nargs="+", metavar="ID", help="예외용 지문 출력 (EXCEPTION_KEY 환경변수 필요)")
     ap.add_argument("--severity", default="critical", choices=["critical", "high", "medium", "low"])
     ap.add_argument("--exceptions", default="docs/supply-chain/exceptions.md")
     ap.add_argument("--report-only", action="store_true")
@@ -106,14 +88,6 @@ def main():
     ap.add_argument("--redact", action="store_true",
                     help="공개 저장소용: 로그·요약에 건수만 남기고 식별자·구성요소는 숨긴다 (--json-out에는 전체 기록)")
     a = ap.parse_args()
-    key = os.environ.get("EXCEPTION_KEY", "")
-
-    if a.fingerprint:
-        if not key:
-            sys.exit("EXCEPTION_KEY 환경변수가 없습니다. 저장소 Secret과 같은 값을 넣고 실행하세요.")
-        for ident in a.fingerprint:
-            print(f"{ident.upper()}\t{fingerprint(key, ident)}")
-        return
     if not a.security:
         ap.error("--security 가 필요합니다")
 
@@ -126,15 +100,10 @@ def main():
         sys.exit(0 if a.report_only else 2)
 
     findings = load_findings(a.security)
-    valid, invalid = load_exceptions(a.exceptions, today, a.redact)
-    if key:
-        for f in findings:
-            f["fp"] = fingerprint(key, f["id"])
-    elif any(k.startswith("h:") for k in valid):
-        invalid.append(("(지문)", "", "EXCEPTION_KEY Secret이 없어 지문 예외를 적용할 수 없음"))
+    valid, invalid = load_exceptions(a.exceptions, today)
 
     def exc(f):
-        return valid.get((f["id"] or "").upper()) or valid.get(f.get("fp", ""))
+        return valid.get((f["id"] or "").upper())
 
     cut = ORDER[a.severity.upper()]
     target = [f for f in findings if ORDER.get(f["sev"], 0) >= cut]

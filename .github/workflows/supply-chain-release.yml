@@ -74,9 +74,6 @@ jobs:
 
       # 7. 취약점 게이트: 기준 이상 취약점 중 exceptions.md의 유효한 예외가 없는 것이 있으면 실패
       - name: 취약점 게이트 (예외 승인 연동)
-        env:
-          # exceptions.md의 지문(h:…)을 대조하는 키. 공개 저장소는 CVE 대신 지문만 적는다
-          EXCEPTION_KEY: ${{ secrets.EXCEPTION_KEY }}
         run: |
           D="$RUNNER_TEMP/sbom/${REPO}_${TAG}"
           python3 scripts/supply-chain/vuln_gate.py --severity "$GATE_SEVERITY" \
